@@ -17,6 +17,33 @@ app.use(
   })
 );
 
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.sz2xe62.mongodb.net/?retryWrites=true&w=majority`;
+
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
+
+//Collections
+const servicesCollection = client.db("techFirmIT").collection("services");
+const testimonialsCollection = client
+  .db("techFirmIT")
+  .collection("testimonials");
+
+//Data get Functions
+app.get("/api/v1/services", async (req, res) => {
+  const services = await servicesCollection.find().toArray();
+  res.send(services);
+});
+app.get("/api/v1/testimonials", async (req, res) => {
+  const testimonials = await testimonialsCollection.find().toArray();
+  res.send(testimonials);
+});
+
 //Create Json Web Token
 app.post("/api/v1/auth/access-token", async (req, res) => {
   const user = req.body;
@@ -34,17 +61,6 @@ app.post("/api/v1/auth/access-token", async (req, res) => {
 app.post("/api/v1/auth/logout", async (req, res) => {
   const user = req.body;
   res.clearCookie("token").send({ success: true });
-});
-
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.sz2xe62.mongodb.net/?retryWrites=true&w=majority`;
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
 });
 
 async function run() {
