@@ -33,6 +33,7 @@ const servicesCollection = client.db("techFirmIT").collection("services");
 const testimonialsCollection = client
   .db("techFirmIT")
   .collection("testimonials");
+const employeesCollection = client.db("techFirmIT").collection("employees");
 
 //Data get Functions
 app.get("/api/v1/services", async (req, res) => {
@@ -42,6 +43,13 @@ app.get("/api/v1/services", async (req, res) => {
 app.get("/api/v1/testimonials", async (req, res) => {
   const testimonials = await testimonialsCollection.find().toArray();
   res.send(testimonials);
+});
+
+//Data Post Functions
+app.post("/api/v1/employees", async (req, res) => {
+  const data = req.body;
+  const result = await employeesCollection.insertOne(data);
+  res.send(result);
 });
 
 //Create Json Web Token
