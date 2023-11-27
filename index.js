@@ -2,10 +2,14 @@ const express = require("express");
 const app = express();
 require("dotenv").config();
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const { MongoClient, ServerApiVersion } = require("mongodb");
 const port = process.env.port || 5000;
 
 //MiddleWare
 app.use(express.json());
+app.use(cookieParser());
 app.use(
   cors({
     origin: ["https://hotelhube.web.app", "http://localhost:5173"],
@@ -13,7 +17,25 @@ app.use(
   })
 );
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+//Create Json Web Token
+app.post("/api/v1/auth/access-token", async (req, res) => {
+  const user = req.body;
+  const token = jwt.sign(user, process.env.SECRETE, { expiresIn: "365days" });
+  console.log(token);
+  res
+    .cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    })
+    .send({ success: true });
+});
+
+app.post("/api/v1/auth/logout", async (req, res) => {
+  const user = req.body;
+  res.clearCookie("token").send({ success: true });
+});
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.sz2xe62.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
