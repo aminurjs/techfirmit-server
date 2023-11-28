@@ -4,7 +4,7 @@ require("dotenv").config();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.port || 5000;
 
 //MiddleWare
@@ -44,11 +44,27 @@ app.get("/api/v1/testimonials", async (req, res) => {
   const testimonials = await testimonialsCollection.find().toArray();
   res.send(testimonials);
 });
+app.get("/api/v1/employee-list", async (req, res) => {
+  const query = { role: "employee" };
+  const employeeList = await employeesCollection.find(query).toArray();
+  res.send(employeeList);
+});
 
 //Data Post Functions
 app.post("/api/v1/employees", async (req, res) => {
   const data = req.body;
   const result = await employeesCollection.insertOne(data);
+  res.send(result);
+});
+
+//Data Post Functions
+app.patch("/api/v1/employees/verified/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+  const updateVerified = {
+    $set: { verified: true },
+  };
+  const result = await employeesCollection.updateOne(query, updateVerified);
   res.send(result);
 });
 
