@@ -49,6 +49,18 @@ app.get("/api/v1/employee-list", async (req, res) => {
   const employeeList = await employeesCollection.find(query).toArray();
   res.send(employeeList);
 });
+app.get("/api/v1/all-employee", async (req, res) => {
+  const query = { verified: true };
+  const allEmployees = await employeesCollection.find(query).toArray();
+  res.send(allEmployees);
+});
+
+app.get("/api/v1/details/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+  const result = await employeesCollection.findOne(query);
+  res.send(result);
+});
 
 //Data Post Functions
 app.post("/api/v1/employees", async (req, res) => {
@@ -67,12 +79,29 @@ app.patch("/api/v1/employees/verified/:id", async (req, res) => {
   const result = await employeesCollection.updateOne(query, updateVerified);
   res.send(result);
 });
+app.patch("/api/v1/update-role/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+  const updateVerified = {
+    $set: { role: "hr" },
+  };
+  const result = await employeesCollection.updateOne(query, updateVerified);
+  res.send(result);
+});
+app.patch("/api/v1/employee/fire/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+  const updateVerified = {
+    $set: { role: "fired" },
+  };
+  const result = await employeesCollection.updateOne(query, updateVerified);
+  res.send(result);
+});
 
 //Create Json Web Token
 app.post("/api/v1/auth/access-token", async (req, res) => {
   const user = req.body;
   const token = jwt.sign(user, process.env.SECRETE, { expiresIn: "365days" });
-  console.log(token);
   res
     .cookie("token", token, {
       httpOnly: true,
@@ -80,6 +109,16 @@ app.post("/api/v1/auth/access-token", async (req, res) => {
       sameSite: "none",
     })
     .send({ success: true });
+});
+
+app.post("/api/v1/auth/status", async (req, res) => {
+  const { email } = req.body;
+  const query = { email: email };
+  const user = await employeesCollection.findOne(query);
+  if (user.role === "fired") {
+    return res.status(403).send({ message: "Fired" });
+  }
+  res.status(200).send({ message: "Ok" });
 });
 
 app.post("/api/v1/auth/logout", async (req, res) => {
