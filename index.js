@@ -17,6 +17,27 @@ app.use(
   })
 );
 
+// middlewares
+//verify token and  access
+const verifyToken = (req, res, next) => {
+  const { token } = req.cookies;
+
+  //if client does not send token
+  if (!token) {
+    return res.status(401).send({ message: "UnAuthorized Access" });
+  }
+
+  // verify a token
+  jwt.verify(token, process.env.SECRETE, function (err, decoded) {
+    if (err) {
+      return res.status(401).send({ message: "UnAuthorized Access" });
+    }
+    // attach decoded user so that others can get it
+    req.user = decoded;
+    next();
+  });
+};
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.sz2xe62.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -34,34 +55,18 @@ const testimonialsCollection = client
   .db("techFirmIT")
   .collection("testimonials");
 const employeesCollection = client.db("techFirmIT").collection("employees");
+const workSheetCollection = client.db("techFirmIT").collection("workSheet");
 
+//Public data
 //Data get Functions
 app.get("/api/v1/services", async (req, res) => {
   const services = await servicesCollection.find().toArray();
   res.send(services);
 });
-app.get("/api/v1/testimonials", async (req, res) => {
+app.get("/api/v1/testimonials", verifyToken, async (req, res) => {
   const testimonials = await testimonialsCollection.find().toArray();
   res.send(testimonials);
 });
-app.get("/api/v1/employee-list", async (req, res) => {
-  const query = { role: "employee" };
-  const employeeList = await employeesCollection.find(query).toArray();
-  res.send(employeeList);
-});
-app.get("/api/v1/all-employee", async (req, res) => {
-  const query = { verified: true };
-  const allEmployees = await employeesCollection.find(query).toArray();
-  res.send(allEmployees);
-});
-
-app.get("/api/v1/details/:id", async (req, res) => {
-  const id = req.params.id;
-  const query = { _id: new ObjectId(id) };
-  const result = await employeesCollection.findOne(query);
-  res.send(result);
-});
-
 //Data Post Functions
 app.post("/api/v1/employees", async (req, res) => {
   const data = req.body;
@@ -69,16 +74,32 @@ app.post("/api/v1/employees", async (req, res) => {
   res.send(result);
 });
 
-//Data Post Functions
-app.patch("/api/v1/employees/verified/:id", async (req, res) => {
-  const id = req.params.id;
-  const query = { _id: new ObjectId(id) };
-  const updateVerified = {
-    $set: { verified: true },
-  };
-  const result = await employeesCollection.updateOne(query, updateVerified);
-  res.send(result);
+//Admin Checking method added
+app.get("/api/v1/employee/admin/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+  const tokenEmail = req.user.email;
+
+  if (email !== tokenEmail) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+
+  const query = { email: email };
+  const user = await employeesCollection.findOne(query);
+  let admin = false;
+  if (user) {
+    admin = user?.role === "admin";
+  }
+  res.send({ admin });
 });
+
+//Secure Data For Admin
+//Data get Functions
+app.get("/api/v1/all-employee", async (req, res) => {
+  const query = { verified: true };
+  const allEmployees = await employeesCollection.find(query).toArray();
+  res.send(allEmployees);
+});
+//Data Update Functions
 app.patch("/api/v1/update-role/:id", async (req, res) => {
   const id = req.params.id;
   const query = { _id: new ObjectId(id) };
@@ -98,6 +119,87 @@ app.patch("/api/v1/employee/fire/:id", async (req, res) => {
   res.send(result);
 });
 
+//HR Checking method
+app.get("/api/v1/employee/hr/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+  const tokenEmail = req.user.email;
+
+  if (email !== tokenEmail) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+
+  const query = { email: email };
+  const user = await employeesCollection.findOne(query);
+  let HR = false;
+  if (user) {
+    HR = user?.role === "hr";
+  }
+  res.send({ HR });
+});
+
+//Secure for HR
+//Data get Functions
+app.get("/api/v1/employee-list", async (req, res) => {
+  const query = { role: "employee" };
+  const employeeList = await employeesCollection.find(query).toArray();
+  res.send(employeeList);
+});
+
+app.get("/api/v1/details/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+  const result = await employeesCollection.findOne(query);
+  res.send(result);
+});
+app.get("/api/v1/all-works", async (req, res) => {
+  const { filter } = req.query;
+  if (filter === "default") {
+    const result = await workSheetCollection.find().toArray();
+    res.send(result);
+  } else {
+    const query = { name: filter };
+    const result = await workSheetCollection.find(query).toArray();
+    res.send(result);
+  }
+});
+
+//Data Update Functions
+app.patch("/api/v1/employees/verified/:id", async (req, res) => {
+  const id = req.params.id;
+  const query = { _id: new ObjectId(id) };
+  const updateVerified = {
+    $set: { verified: true },
+  };
+  const result = await employeesCollection.updateOne(query, updateVerified);
+  res.send(result);
+});
+
+//HR Checking method
+app.get("/api/v1/employee/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+  const tokenEmail = req.user.email;
+
+  if (email !== tokenEmail) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+
+  const query = { email: email };
+  const user = await employeesCollection.findOne(query);
+  let employee = false;
+  if (user) {
+    employee = user?.role === "employee";
+  }
+  res.send({ employee });
+});
+
+//Secure For Employee
+//Data Post Functions
+app.post("/api/v1/work-sheet", async (req, res) => {
+  const data = req.body;
+  const result = await workSheetCollection.insertOne(data);
+  res.send(result);
+});
+
 //Create Json Web Token
 app.post("/api/v1/auth/access-token", async (req, res) => {
   const user = req.body;
@@ -110,7 +212,7 @@ app.post("/api/v1/auth/access-token", async (req, res) => {
     })
     .send({ success: true });
 });
-
+// Auth status checking
 app.post("/api/v1/auth/status", async (req, res) => {
   const { email } = req.body;
   const query = { email: email };
