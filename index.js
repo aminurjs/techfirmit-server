@@ -4,6 +4,7 @@ require("dotenv").config();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const stripe = require("stripe")(process.env.Stripe_Secrete_Key);
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.port || 5000;
 
@@ -12,7 +13,7 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: ["https://hotelhube.web.app", "http://localhost:5173"],
+    origin: ["http://localhost:5173"],
     credentials: true,
   })
 );
@@ -56,6 +57,7 @@ const testimonialsCollection = client
   .collection("testimonials");
 const employeesCollection = client.db("techFirmIT").collection("employees");
 const workSheetCollection = client.db("techFirmIT").collection("workSheet");
+const paymentsCollection = client.db("techFirmIT").collection("payments");
 
 //Public data
 //Data get Functions
@@ -63,7 +65,7 @@ app.get("/api/v1/services", async (req, res) => {
   const services = await servicesCollection.find().toArray();
   res.send(services);
 });
-app.get("/api/v1/testimonials", verifyToken, async (req, res) => {
+app.get("/api/v1/testimonials", async (req, res) => {
   const testimonials = await testimonialsCollection.find().toArray();
   res.send(testimonials);
 });
@@ -94,13 +96,13 @@ app.get("/api/v1/employee/admin/:email", verifyToken, async (req, res) => {
 
 //Secure Data For Admin
 //Data get Functions
-app.get("/api/v1/all-employee", async (req, res) => {
+app.get("/api/v1/all-employee", verifyToken, async (req, res) => {
   const query = { verified: true };
   const allEmployees = await employeesCollection.find(query).toArray();
   res.send(allEmployees);
 });
 //Data Update Functions
-app.patch("/api/v1/update-role/:id", async (req, res) => {
+app.patch("/api/v1/update-role/:id", verifyToken, async (req, res) => {
   const id = req.params.id;
   const query = { _id: new ObjectId(id) };
   const updateVerified = {
@@ -109,7 +111,7 @@ app.patch("/api/v1/update-role/:id", async (req, res) => {
   const result = await employeesCollection.updateOne(query, updateVerified);
   res.send(result);
 });
-app.patch("/api/v1/employee/fire/:id", async (req, res) => {
+app.patch("/api/v1/employee/fire/:id", verifyToken, async (req, res) => {
   const id = req.params.id;
   const query = { _id: new ObjectId(id) };
   const updateVerified = {
@@ -139,19 +141,20 @@ app.get("/api/v1/employee/hr/:email", verifyToken, async (req, res) => {
 
 //Secure for HR
 //Data get Functions
-app.get("/api/v1/employee-list", async (req, res) => {
+app.get("/api/v1/employee-list", verifyToken, async (req, res) => {
   const query = { role: "employee" };
   const employeeList = await employeesCollection.find(query).toArray();
   res.send(employeeList);
 });
 
-app.get("/api/v1/details/:id", async (req, res) => {
-  const id = req.params.id;
-  const query = { _id: new ObjectId(id) };
-  const result = await employeesCollection.findOne(query);
-  res.send(result);
+app.get("/api/v1/details/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+  const query = { email: email };
+  const user = await employeesCollection.findOne(query);
+  const payment = await paymentsCollection.find(query).toArray();
+  res.send({ user, payment });
 });
-app.get("/api/v1/all-works", async (req, res) => {
+app.get("/api/v1/all-works", verifyToken, async (req, res) => {
   const { filter } = req.query;
   if (filter === "default") {
     const result = await workSheetCollection.find().toArray();
@@ -162,9 +165,29 @@ app.get("/api/v1/all-works", async (req, res) => {
     res.send(result);
   }
 });
+//Data post Functions
+app.post("/api/v1/payment-data", verifyToken, async (req, res) => {
+  const data = req.body;
+  const result = await paymentsCollection.insertOne(data);
+  res.send(result);
+});
+app.post("/api/v1/checking-payment", verifyToken, async (req, res) => {
+  const data = req.body;
+  const query = {
+    email: data.email,
+    month: data.selectedMonth,
+    year: data.selectedYear,
+  };
+  const result = await paymentsCollection.findOne(query);
+  if (result) {
+    res.send({ status: true });
+  } else {
+    res.send({ status: false });
+  }
+});
 
 //Data Update Functions
-app.patch("/api/v1/employees/verified/:id", async (req, res) => {
+app.patch("/api/v1/employees/verified/:id", verifyToken, async (req, res) => {
   const id = req.params.id;
   const query = { _id: new ObjectId(id) };
   const updateVerified = {
@@ -194,12 +217,23 @@ app.get("/api/v1/employee/:email", verifyToken, async (req, res) => {
 
 //Secure For Employee
 //Data Post Functions
-app.post("/api/v1/work-sheet", async (req, res) => {
+app.post("/api/v1/work-sheet", verifyToken, async (req, res) => {
   const data = req.body;
   const result = await workSheetCollection.insertOne(data);
   res.send(result);
 });
 
+//Data get Functions
+app.get(
+  "/api/v1/employee/payment-history/:email",
+  verifyToken,
+  async (req, res) => {
+    const email = req.params.email;
+    const query = { email: email };
+    const result = await paymentsCollection.find(query).toArray();
+    res.send(result);
+  }
+);
 //Create Json Web Token
 app.post("/api/v1/auth/access-token", async (req, res) => {
   const user = req.body;
@@ -226,6 +260,19 @@ app.post("/api/v1/auth/status", async (req, res) => {
 app.post("/api/v1/auth/logout", async (req, res) => {
   const user = req.body;
   res.clearCookie("token").send({ success: true });
+});
+
+app.post("/api/v1/create-payment-intent", async (req, res) => {
+  const { price } = req.body;
+  const amount = parseInt(price * 100);
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: amount,
+    currency: "usd",
+    payment_method_types: ["card"],
+  });
+  res.send({
+    clientSecret: paymentIntent.client_secret,
+  });
 });
 
 async function run() {
